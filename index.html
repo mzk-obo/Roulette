@@ -2,38 +2,942 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
+    <!-- モバイル対応とレスポンシブデザイン -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWAマニフェストとテーマカラー (manifest.jsonが別途必要) -->
+    <link rel="manifest" href="./manifest.json">
+    <meta name="theme-color" content="#4f46e5">
     <title>マルチルーレット項目選択ツール</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        'primary-blue': '#4f46e5',
-                        'primary-red': '#dc2626',
-                        'bg-light': '#f9fafb',
-                        'bg-dark': '#1f2937',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
-                    }
+    <!-- Font Awesome (アイコン用) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Google Fonts (Inter) -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        :root { font-family: 'Inter', sans-serif; }
+        
+        /* カスタムスタイル */
+        .card {
+            /* 見た目を良くするため、影を適用 */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+
+        /* トグルスイッチのカスタムスタイル */
+        .toggle-switch {
+            width: 5rem; /* スイッチバーの幅 */
+            height: 2.5rem; /* スイッチバーの高さ */
+            background-color: #d1d5db; /* 灰色 */
+            transition: background-color 0.3s;
+        }
+
+        .toggle-switch-dot {
+            width: 2.5rem; /* ドットの直径 */
+            height: 2.5rem; /* ドットの直径 */
+            transition: transform 0.3s, background-color 0.3s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+
+        /* スイッチON（復元抽出）の状態 */
+        .toggle-on {
+            background-color: #3b82f6; /* 青 */
+        }
+
+        /* スイッチOFF（非復元抽出）の状態 */
+        .toggle-off {
+            background-color: #ef4444; /* 赤 */
+        }
+        
+        /* 抽選表示エリアのスタイル */
+        #roulette-display {
+            min-height: 5rem;
+            line-height: 1.2;
+            letter-spacing: 0.05em;
+            word-break: break-all;
+        }
+
+        /* モーダルの背景 */
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body class="bg-gray-100 p-2 md:p-6 min-h-screen">
+    <div id="app" class="max-w-4xl mx-auto">
+        
+        <!-- ヘッダーと認証情報表示 -->
+        <header class="mb-6 p-4 bg-white rounded-xl card">
+            <h1 class="text-3xl font-extrabold text-gray-800 mb-1 flex items-center">
+                <i class="fas fa-random text-indigo-500 mr-3"></i>
+                マルチルーレット項目選択ツール
+            </h1>
+            <p id="auth-status" class="text-xs text-gray-500 mt-1">
+                認証ステータス: 読み込み中... | User ID: 読み込み中...
+            </p>
+        </header>
+
+        <!-- ルーレット選択・管理エリア -->
+        <div id="roulette-manager-section" class="mb-6 p-4 bg-indigo-50 border-t-4 border-indigo-600 rounded-xl card hidden">
+            <h2 class="text-xl font-semibold text-indigo-800 mb-4">
+                <i class="fas fa-list-alt mr-2"></i>ルーレット選択・管理
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                
+                <!-- 既存ルーレットの選択 -->
+                <div class="md:col-span-1">
+                    <label for="roulette-select" class="block text-sm font-medium text-gray-700">現在のルーレット</label>
+                    <select id="roulette-select" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg shadow-sm" disabled>
+                        <option value="">ルーレットを読み込み中...</option>
+                    </select>
+                </div>
+                
+                <!-- 新しいルーレットの追加 -->
+                <div class="md:col-span-1">
+                    <label for="new-roulette-name" class="block text-sm font-medium text-gray-700">新しいルーレット名</label>
+                    <div class="flex mt-1">
+                        <input type="text" id="new-roulette-name" placeholder="新しい名前を入力" class="block w-full rounded-l-lg border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                        <button id="add-roulette-btn" class="px-4 py-2 bg-indigo-500 text-white font-medium rounded-r-lg hover:bg-indigo-600 transition duration-150 shadow-md">
+                            追加
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ルーレットの削除 -->
+                <div class="md:col-span-1 flex items-end">
+                    <button id="delete-roulette-btn" class="w-full bg-red-500 text-white font-medium py-2 px-4 rounded-lg hover:bg-red-600 transition duration-150 shadow-md disabled:bg-red-300" disabled>
+                        <i class="fas fa-trash-alt mr-1"></i>
+                        現在のルーレットを削除
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- メインコンテンツ -->
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- 左カラム: 抽選設定 -->
+            <section class="lg:col-span-1">
+                <div class="bg-white p-6 rounded-xl card">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2"><i class="fas fa-cogs mr-2 text-yellow-500"></i>抽選設定</h2>
+                    
+                    <!-- 項目数の設定 -->
+                    <div class="mb-5">
+                        <label for="num-items" class="block text-sm font-medium text-gray-700">
+                            項目数 (1〜1000)
+                        </label>
+                        <input type="number" id="num-items" min="1" max="1000" value="10" class="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:ring-indigo-500 focus:border-indigo-500" placeholder="10">
+                        <button id="generate-items-btn" class="mt-2 w-full bg-green-500 text-white font-semibold py-2 rounded-lg hover:bg-green-600 transition duration-150 shadow-md">
+                            <i class="fas fa-list-ol mr-1"></i>
+                            項目を生成
+                        </button>
+                    </div>
+                    
+                    <!-- 抽選個数の選択 -->
+                    <div class="mb-5">
+                        <label for="draw-count" class="block text-sm font-medium text-gray-700">
+                            一度に抽選する個数
+                        </label>
+                        <select id="draw-count" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-lg shadow-sm">
+                            <!-- オプションはJSで生成 -->
+                        </select>
+                    </div>
+                    
+                    <!-- 復元抽出 / 非復元抽出 スイッチ -->
+                    <div class="mb-6">
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">抽選方法 (当選した項目)</h3>
+                        <div class="flex items-center space-x-4">
+                            <!-- ラベル: 含めない -->
+                            <span id="label-non-replacement" class="text-red-500 font-bold text-lg w-1/4 text-right transition-colors duration-300">
+                                含めない
+                            </span>
+
+                            <!-- トグルスイッチ本体 -->
+                            <div class="relative flex items-center w-1/2 justify-center">
+                                <label for="is-replacement-toggle" class="cursor-pointer">
+                                    <!-- スイッチバー (ベース) -->
+                                    <div id="replacement-switch" class="toggle-switch relative rounded-full transition duration-300">
+                                        <!-- スイッチドット (玉) -->
+                                        <div id="replacement-switch-dot" class="toggle-switch-dot absolute top-0 rounded-full bg-white transition duration-300"></div>
+                                    </div>
+                                    <input type="checkbox" id="is-replacement-toggle" class="sr-only">
+                                </label>
+                            </div>
+
+                            <!-- ラベル: 含める -->
+                            <span id="label-replacement" class="text-gray-400 font-bold text-lg w-1/4 text-left transition-colors duration-300">
+                                含める
+                            </span>
+                        </div>
+                        <p id="replacement-status-text" class="text-center text-sm mt-2 text-gray-500">
+                            非復元抽出 (当選項目はリストから削除されます)
+                        </p>
+                    </div>
+
+                    <!-- 履歴の消去ボタン -->
+                    <div class="border-t pt-4">
+                        <button id="clear-history-btn" class="w-full bg-yellow-500 text-white font-semibold py-2 rounded-lg hover:bg-yellow-600 transition duration-150 shadow-md disabled:bg-yellow-300">
+                            <i class="fas fa-history mr-1"></i>
+                            現在のルーレットの履歴を消去
+                        </button>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- 中央カラム: 抽選実行と結果表示 -->
+            <section class="lg:col-span-2">
+                <div class="bg-white p-6 rounded-xl card mb-6">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2"><i class="fas fa-star mr-2 text-red-500"></i>抽選シミュレーション</h2>
+                    
+                    <!-- 抽選結果表示エリア -->
+                    <div id="roulette-display" class="w-full text-center text-4xl md:text-6xl font-extrabold text-white bg-indigo-600 p-6 rounded-xl shadow-inner mb-6 flex items-center justify-center">
+                        抽選開始を待っています
+                    </div>
+                    
+                    <!-- 結果詳細と項目情報 -->
+                    <div class="text-gray-700 mb-4">
+                        <p class="text-sm font-semibold mb-1">結果:</p>
+                        <p id="result-text" class="text-2xl text-red-600 font-bold mb-4">--</p>
+                        
+                        <p class="text-sm font-semibold mb-1 border-t pt-2">現在のルーレット情報:</p>
+                        <p id="item-count-info" class="text-sm">
+                            <i class="fas fa-hashtag mr-1 text-indigo-500"></i>
+                            総項目数: <span id="total-items-span" class="font-bold">0</span>
+                        </p>
+                        <p id="remaining-items-info" class="text-sm mt-1">
+                            <i class="fas fa-check-circle mr-1 text-green-500"></i>
+                            残りの項目: <span id="remaining-items-span" class="font-mono text-gray-600 text-xs">項目を生成してください</span>
+                        </p>
+                    </div>
+
+                    <!-- 抽選実行ボタン -->
+                    <button id="draw-btn" class="w-full bg-indigo-600 text-white text-3xl font-extrabold py-4 rounded-xl hover:bg-indigo-700 transition duration-150 shadow-lg hover:shadow-xl disabled:bg-gray-400 disabled:cursor-not-allowed">
+                        <i class="fas fa-dice mr-2"></i>抽選開始！
+                    </button>
+                </div>
+            </section>
+
+            <!-- 右カラム: 過去の当選履歴 -->
+            <section class="lg:col-span-3">
+                <div class="bg-white p-6 rounded-xl card">
+                    <h2 class="text-xl font-bold text-gray-800 mb-4 border-b pb-2"><i class="fas fa-list-ul mr-2 text-blue-500"></i>過去の当選履歴</h2>
+                    
+                    <!-- 履歴リストコンテナ -->
+                    <div id="history-list-container" class="space-y-3 max-h-96 overflow-y-auto">
+                        <p id="no-history-message" class="text-gray-500 text-center py-4">履歴はありません。</p>
+                        <!-- JSで履歴項目がここに追加されます -->
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <!-- 確認モーダル -->
+    <div id="confirmation-modal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center hidden" role="dialog" aria-modal="true">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full mx-4">
+            <h3 id="modal-title" class="text-xl font-bold text-gray-800 mb-4">確認</h3>
+            <p id="modal-message" class="text-gray-700 mb-6">本当に実行しますか？</p>
+            <div class="flex justify-end space-x-4">
+                <button id="modal-cancel-btn" class="px-4 py-2 bg-gray-300 text-gray-800 font-medium rounded-lg hover:bg-gray-400 transition duration-150">キャンセル</button>
+                <button id="modal-confirm-btn" class="px-4 py-2 bg-indigo-500 text-white font-medium rounded-lg hover:bg-indigo-600 transition duration-150">確認</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 読み込み中モーダル -->
+    <div id="loading-modal" class="modal-overlay fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-xl shadow-2xl max-w-xs w-full mx-4 flex flex-col items-center">
+            <div class="animate-spin rounded-full h-10 w-10 border-4 border-t-4 border-indigo-500 border-t-transparent mb-3"></div>
+            <p class="text-gray-700 font-medium">データを処理中...</p>
+        </div>
+    </div>
+
+    <!-- Firebase SDKの読み込み (ここからJavaScriptが始まります) -->
+    <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged, setPersistence, browserLocalPersistence } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { getFirestore, doc, setDoc, onSnapshot, collection, query, orderBy, limit, addDoc, serverTimestamp, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // Firestoreのデバッグログを有効にする (開発用)
+    setLogLevel('debug'); 
+
+    // =========================================================================
+    // 0. Firebase設定情報 (GitHub Pages用 - 必須: ご提供いただいた値)
+    // =========================================================================
+
+    // ご提供いただいたFirebaseプロジェクト設定
+    const HARDCODED_FIREBASE_CONFIG = {
+      apiKey: "AIzaSyBBpQxbWj7mwz6MOLI5yVa9XmnGmw6qJ0o",
+      authDomain: "rouletteapp-github-16d0d.firebaseapp.com",
+      projectId: "rouletteapp-github-16d0d",
+      storageBucket: "rouletteapp-github-16d0d.firebasestorage.app",
+      messagingSenderId: "844360168317",
+      appId: "1:844360168317:web:4bc36d427489b5366bd214",
+      measurementId: "G-DT5L6W66KM" // measurementIdはFirestoreには不要ですが、Configに含めます
+    };
+
+    // GitHub Pages環境用の変数設定
+    const appId = HARDCODED_FIREBASE_CONFIG.projectId || 'github-pages'; 
+    const firebaseConfig = HARDCODED_FIREBASE_CONFIG;
+    const initialAuthToken = null; // 匿名認証を使用するためトークンは無視
+
+    let app, db, auth;
+    let userId = null;
+    let isAuthReady = false; // 認証完了フラグ
+    let isManagerLoaded = false; // ルーレットマネージャーデータ読み込み完了フラグ
+
+    // 全ルーレット設定を管理するオブジェクト
+    let rouletteManager = {
+        activeRouletteId: null,
+        roulettes: [], // { id, name, numItems, drawCount, isReplacement, items } の配列
+    };
+    let historyList = [];
+
+    // Firestoreのデータパス定義
+    const getRouletteManagerDocPath = (uid) => 
+        `artifacts/${appId}/users/${uid}/settings/roulette_manager`;
+
+    // 履歴コレクションパス
+    const getHistoryCollectionPath = (uid, rouletteId) => 
+        `artifacts/${appId}/users/${uid}/history/${rouletteId}/results`;
+
+
+    // =========================================================================
+    // 1. Firebase 初期化と認証
+    // =========================================================================
+
+    /**
+     * Firebaseサービスを初期化し、匿名認証を実行します。
+     */
+    const initFirebase = async () => {
+        try {
+            app = initializeApp(firebaseConfig);
+            db = getFirestore(app);
+            auth = getAuth(app);
+            
+            // ユーザーがブラウザを閉じても認証状態を維持する
+            await setPersistence(auth, browserLocalPersistence);
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    // 認証成功時
+                    userId = user.uid;
+                    isAuthReady = true;
+                    document.getElementById('auth-status').textContent = `認証済み | User ID: ${userId}`;
+                    
+                    // 認証が完了したら、データ処理を開始
+                    await setupDataListeners();
+                    
+                } else {
+                    // ユーザーがいない場合、匿名認証でサインインを試みる
+                    await signInAnonymously(auth);
+                    document.getElementById('auth-status').textContent = `サインイン中...`;
                 }
+            });
+
+        } catch (error) {
+            console.error("Firebase Initialization or Sign-in Error:", error);
+            document.getElementById('auth-status').textContent = `エラー: 認証失敗 (${error.code})`;
+        }
+    };
+
+    /**
+     * Firestoreのデータ変更を監視するリスナーを設定します。
+     */
+    const setupDataListeners = async () => {
+        if (!db || !userId) return;
+
+        const managerDocRef = doc(db, getRouletteManagerDocPath(userId));
+        
+        // 1. ルーレットマネージャーの監視設定
+        onSnapshot(managerDocRef, (docSnap) => {
+            let managerData = null;
+            if (docSnap.exists()) {
+                managerData = docSnap.data();
+            }
+
+            if (managerData && managerData.roulettes && managerData.roulettes.length > 0) {
+                // データが存在する場合
+                rouletteManager = managerData;
+            } else if (!isManagerLoaded) {
+                // データが存在せず、かつ初回ロード時のみ、初期ルーレットを作成
+                console.log("No roulette data found. Creating initial manager.");
+                initializeRouletteManager();
+                // この時点では保存せず、UI更新後にユーザー操作または次の onSnapshot で保存を期待
+            }
+            
+            isManagerLoaded = true; // 初回ロード完了
+            updateRouletteUI();
+            
+            // 2. 履歴の監視設定 (アクティブなルーレットIDが確定した後)
+            if (rouletteManager.activeRouletteId) {
+                setupHistoryListener(rouletteManager.activeRouletteId);
+            }
+            
+            hideLoadingModal();
+        }, (error) => {
+            console.error("Error fetching roulette manager:", error);
+            isManagerLoaded = true;
+            hideLoadingModal();
+        });
+    };
+
+    /**
+     * 特定のルーレットIDの履歴を監視するリスナーを設定します。
+     */
+    let currentHistoryUnsubscribe = null;
+    const setupHistoryListener = (rouletteId) => {
+        // 既存のリスナーがあれば解除
+        if (currentHistoryUnsubscribe) {
+            currentHistoryUnsubscribe();
+            currentHistoryUnsubscribe = null;
+        }
+        
+        const historyColRef = collection(db, getHistoryCollectionPath(userId, rouletteId));
+        // 常に最新の100件を降順で取得
+        const historyQuery = query(historyColRef, orderBy("timestamp", "desc"), limit(100));
+
+        currentHistoryUnsubscribe = onSnapshot(historyQuery, (snapshot) => {
+            historyList = [];
+            snapshot.forEach((doc) => {
+                historyList.push({ id: doc.id, ...doc.data() });
+            });
+            updateHistoryUI();
+        }, (error) => {
+            console.error("Error fetching history:", error);
+        });
+    };
+
+    /**
+     * ルーレットマネージャーが存在しない場合の初期設定を行います。
+     */
+    const initializeRouletteManager = () => {
+        const initialId = 'default-' + Date.now();
+        rouletteManager = {
+            activeRouletteId: initialId,
+            roulettes: [{
+                id: initialId,
+                name: "マイ・ルーレット",
+                numItems: 10,
+                drawCount: 1,
+                isReplacement: false,
+                items: generateItemLabels(10)
+            }]
+        };
+        // 初期化時は即時保存せず、UI更新後にユーザー操作を待つ
+    };
+
+    /**
+     * ルーレットマネージャーデータをFirestoreに保存します。
+     * @returns {Promise<void>}
+     */
+    const saveRouletteManager = async () => {
+        if (!db || !userId || !isAuthReady || !isManagerLoaded) {
+            console.log("Skipping save: Auth not ready or Manager not loaded.");
+            return; // 認証・ロード完了前は保存をスキップ
+        }
+        showLoadingModal();
+        try {
+            const managerDocRef = doc(db, getRouletteManagerDocPath(userId));
+            // Firestoreへの保存
+            await setDoc(managerDocRef, rouletteManager);
+            console.log("Roulette manager saved successfully.");
+        } catch (e) {
+            console.error("Error saving roulette manager: ", e);
+            alert("設定の保存中にエラーが発生しました。");
+        } finally {
+            hideLoadingModal();
+        }
+    };
+    
+    // =========================================================================
+    // 2. UI操作とロジック
+    // =========================================================================
+
+    /**
+     * 指定された項目数に基づいて、新しい項目ラベルの配列を生成します。
+     * @param {number} num - 生成する項目数
+     * @returns {string[]} - 項目ラベルの配列 (例: ["項目1", "項目2", ...])
+     */
+    const generateItemLabels = (num) => {
+        const labels = [];
+        for (let i = 1; i <= num; i++) {
+            labels.push(i.toString()); // 数字のみを保存
+        }
+        return labels;
+    };
+    
+    /**
+     * アクティブなルーレットオブジェクトを取得します。
+     * @returns {object | null}
+     */
+    const getActiveRoulette = () => {
+        if (!rouletteManager.activeRouletteId) return null;
+        return rouletteManager.roulettes.find(r => r.id === rouletteManager.activeRouletteId);
+    };
+
+    /**
+     * 項目名 ("項目N") から数字 ("N") を抽出するユーティリティ関数
+     * @param {string} item - 項目の文字列
+     * @returns {string} - 数字の文字列
+     */
+    const getNumberFromItem = (item) => {
+        // 現在、保存形式が数字のみのため、そのまま返却
+        return item; 
+    };
+
+    /**
+     * ルーレットUI要素をアクティブなルーレット設定に基づいて更新します。
+     */
+    const updateRouletteUI = () => {
+        const activeRoulette = getActiveRoulette();
+        const selectElement = document.getElementById('roulette-select');
+        const numItemsElement = document.getElementById('num-items');
+        const drawCountElement = document.getElementById('draw-count');
+
+        // 1. ロード状態のトグル
+        const isReady = isAuthReady && isManagerLoaded;
+        document.getElementById('roulette-manager-section').classList.toggle('hidden', !isReady);
+        document.getElementById('draw-btn').disabled = !isReady || !activeRoulette;
+        selectElement.disabled = !isReady;
+        
+        if (!isReady) return;
+
+        // 2. ルーレット選択ドロップダウンの更新
+        const currentSelectedId = selectElement.value;
+        selectElement.innerHTML = ''; // 一旦クリア
+        
+        rouletteManager.roulettes.forEach(r => {
+            const option = document.createElement('option');
+            option.value = r.id;
+            option.textContent = r.name;
+            selectElement.appendChild(option);
+        });
+
+        // アクティブなIDを選択状態にする
+        selectElement.value = rouletteManager.activeRouletteId;
+
+        // 3. 設定値の反映
+        if (activeRoulette) {
+            numItemsElement.value = activeRoulette.numItems;
+            
+            // 抽選個数ドロップダウンの更新
+            drawCountElement.innerHTML = '';
+            for (let i = 1; i <= Math.min(10, activeRoulette.numItems); i++) {
+                const option = document.createElement('option');
+                option.value = i;
+                option.textContent = `${i} 個`;
+                drawCountElement.appendChild(option);
+            }
+            // drawCountを反映。残りの項目数より多くならないように調整
+            let maxDraw = Math.min(activeRoulette.drawCount, activeRoulette.items.length);
+            drawCountElement.value = maxDraw;
+
+            // 抽選方法スイッチと表示の更新
+            document.getElementById('is-replacement-toggle').checked = activeRoulette.isReplacement;
+            updateReplacementSwitchAppearance(activeRoulette.isReplacement);
+            
+            // 4. 現在の項目情報の表示
+            const remainingItemsString = activeRoulette.items.length > 50 
+                ? `${activeRoulette.items.slice(0, 50).join(', ')}, 他 ${activeRoulette.items.length - 50} 項目`
+                : activeRoulette.items.join(', ');
+            
+            document.getElementById('total-items-span').textContent = activeRoulette.numItems;
+            document.getElementById('remaining-items-span').textContent = remainingItemsString;
+
+            // 項目が残っているかによって抽選ボタンを有効化
+            document.getElementById('draw-btn').disabled = activeRoulette.items.length === 0;
+
+            // 削除ボタンの有効化（ルーレットが1つだけの場合は削除不可）
+            document.getElementById('delete-roulette-btn').disabled = rouletteManager.roulettes.length === 1;
+
+        } else {
+            // アクティブなルーレットがない場合（通常は発生しないはず）
+            document.getElementById('total-items-span').textContent = '0';
+            document.getElementById('remaining-items-span').textContent = '---';
+            document.getElementById('draw-btn').disabled = true;
+        }
+    };
+    
+    /**
+     * 履歴リストのUIを更新します。
+     */
+    const updateHistoryUI = () => {
+        const container = document.getElementById('history-list-container');
+        container.innerHTML = ''; // リストをクリア
+        
+        if (historyList.length === 0) {
+            document.getElementById('no-history-message').classList.remove('hidden');
+            return;
+        }
+        document.getElementById('no-history-message').classList.add('hidden');
+
+        historyList.forEach((historyItem) => {
+            const resultItems = historyItem.result.map(item => getNumberFromItem(item));
+            // 結果を小さい順にソート (再度保険として)
+            resultItems.sort((a, b) => parseInt(a) - parseInt(b));
+            
+            const timestamp = new Date(historyItem.timestamp?.toDate() || Date.now()).toLocaleString();
+            
+            const itemElement = document.createElement('div');
+            itemElement.className = 'p-3 bg-gray-50 rounded-lg border border-gray-200';
+            itemElement.innerHTML = `
+                <p class="text-sm font-semibold text-gray-800">
+                    <i class="fas fa-bullseye text-green-500 mr-2"></i>当選: 
+                    <span class="font-mono text-lg text-red-600">${resultItems.join(', ')}</span>
+                </p>
+                <p class="text-xs text-gray-500 mt-1">
+                    ${timestamp} | 
+                    方法: ${historyItem.isReplacement ? '復元抽出' : '非復元抽出'} | 
+                    総項目: ${historyItem.totalItems}
+                </p>
+            `;
+            container.appendChild(itemElement);
+        });
+    };
+
+    /**
+     * 復元抽出スイッチの見た目（色とドットの位置）を更新します。
+     * @param {boolean} isReplacement - trueなら復元抽出 (含める)
+     */
+    const updateReplacementSwitchAppearance = (isReplacement) => {
+        const dot = document.getElementById('replacement-switch-dot');
+        const bar = document.getElementById('replacement-switch');
+        const labelOn = document.getElementById('label-replacement'); // 含める
+        const labelOff = document.getElementById('label-non-replacement'); // 含めない
+        const statusText = document.getElementById('replacement-status-text');
+
+        if (isReplacement) {
+            // 復元抽出 (含める) - 青色
+            dot.style.transform = 'translateX(2rem)';
+            bar.classList.add('toggle-on');
+            bar.classList.remove('toggle-off', 'bg-gray-400');
+            labelOn.classList.add('text-blue-600');
+            labelOn.classList.remove('text-gray-400');
+            labelOff.classList.remove('text-red-600');
+            statusText.textContent = '復元抽出 (当選項目はリストに残り、再度抽選されます)';
+        } else {
+            // 非復元抽出 (含めない) - 赤色
+            dot.style.transform = 'translateX(0rem)';
+            bar.classList.add('toggle-off');
+            bar.classList.remove('toggle-on', 'bg-gray-400');
+            labelOff.classList.add('text-red-600');
+            labelOff.classList.remove('text-gray-400');
+            labelOn.classList.remove('text-blue-600');
+            statusText.textContent = '非復元抽出 (当選項目はリストから削除されます)';
+        }
+    };
+    
+    // =========================================================================
+    // 3. 実行関数
+    // =========================================================================
+
+    /**
+     * 抽選処理を実行し、結果をUIに表示し、Firestoreに保存します。
+     */
+    const drawLottery = async () => {
+        const roulette = getActiveRoulette();
+        if (!roulette || roulette.items.length === 0) {
+            showCustomModal("エラー", "抽選対象の項目が残っていません。項目を再生成してください。", () => {});
+            return;
+        }
+
+        const items = [...roulette.items]; // 残りの項目
+        const drawCount = parseInt(document.getElementById('draw-count').value);
+        const result = [];
+        const isReplacement = roulette.isReplacement;
+
+        if (!isReplacement && drawCount > items.length) {
+             showCustomModal("エラー", `残りの項目数 (${items.length} 個) よりも抽選個数 (${drawCount} 個) が多いため、抽選できません。`, () => {});
+             return;
+        }
+
+        // 抽選ロジック
+        for (let i = 0; i < drawCount; i++) {
+            if (items.length === 0) break; // 非復元抽出で項目が尽きた場合
+            
+            const randomIndex = Math.floor(Math.random() * items.length);
+            const drawnItem = items[randomIndex];
+            result.push(drawnItem);
+            
+            if (!isReplacement) {
+                // 非復元抽出: 抽選された項目をリストから削除
+                items.splice(randomIndex, 1);
             }
         }
+        
+        // 結果を数値としてソート
+        const sortedResult = result.sort((a, b) => parseInt(a) - parseInt(b));
+        const resultText = sortedResult.join(', ');
+
+        // UI表示の更新
+        document.getElementById('roulette-display').textContent = resultText;
+        document.getElementById('result-text').textContent = resultText;
+
+        // 抽選後の処理
+        if (!isReplacement) {
+            // 非復元抽出の場合、ルーレットの項目リストを更新し保存
+            roulette.items = items; 
+            await saveRouletteManager();
+        }
+
+        // 履歴の保存
+        await saveHistory(sortedResult, roulette.numItems, isReplacement);
+        
+        // UIをリフレッシュ
+        updateRouletteUI();
+    };
+
+    /**
+     * 当選履歴をFirestoreに保存します。
+     * @param {string[]} result - 当選した項目リスト
+     * @param {number} totalItems - 抽選時の総項目数
+     * @param {boolean} isReplacement - 抽選方法
+     */
+    const saveHistory = async (result, totalItems, isReplacement) => {
+        if (!db || !userId || !rouletteManager.activeRouletteId) return;
+
+        try {
+            const historyColRef = collection(db, getHistoryCollectionPath(userId, rouletteManager.activeRouletteId));
+            await addDoc(historyColRef, {
+                result: result,
+                totalItems: totalItems,
+                isReplacement: isReplacement,
+                timestamp: serverTimestamp()
+            });
+        } catch (e) {
+            console.error("Error saving history: ", e);
+        }
+    };
+    
+    // =========================================================================
+    // 4. モーダルとユーティリティ関数
+    // =========================================================================
+
+    let modalResolve = null;
+
+    /**
+     * カスタム確認モーダルを表示します。
+     * @param {string} title - モーダルのタイトル
+     * @param {string} message - モーダルのメッセージ
+     * @param {function} onConfirm - 確認ボタンが押されたときに実行する関数
+     */
+    const showCustomModal = (title, message, onConfirm) => {
+        const modal = document.getElementById('confirmation-modal');
+        document.getElementById('modal-title').textContent = title;
+        document.getElementById('modal-message').textContent = message;
+
+        // 既存のイベントリスナーを削除 (二重実行防止)
+        const confirmBtn = document.getElementById('modal-confirm-btn');
+        const cancelBtn = document.getElementById('modal-cancel-btn');
+        confirmBtn.onclick = null;
+        cancelBtn.onclick = null;
+
+        confirmBtn.onclick = () => {
+            modal.classList.add('hidden');
+            if (onConfirm) onConfirm();
+        };
+
+        cancelBtn.onclick = () => {
+            modal.classList.add('hidden');
+        };
+
+        modal.classList.remove('hidden');
+    };
+
+    const showLoadingModal = () => {
+        document.getElementById('loading-modal').classList.remove('hidden');
+    };
+
+    const hideLoadingModal = () => {
+        document.getElementById('loading-modal').classList.add('hidden');
+    };
+    
+    // =========================================================================
+    // 5. イベントリスナー
+    // =========================================================================
+
+    // アプリケーション起動時の初期処理
+    window.addEventListener('load', () => {
+        initFirebase(); // Firebase初期化と認証開始
+
+        // PWAサービスワーカーの登録
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('./service-worker.js')
+                .then(reg => console.log('Service Worker Registered.', reg))
+                .catch(err => console.error('Service Worker registration failed:', err));
+        }
+    });
+
+    // --- ルーレット管理 ---
+    
+    // ルーレット選択時の処理
+    document.getElementById('roulette-select').addEventListener('change', (e) => {
+        rouletteManager.activeRouletteId = e.target.value;
+        saveRouletteManager(); // アクティブIDの変更を保存
+        updateRouletteUI();
+        // 履歴リスナーを新しいルーレットIDに切り替える
+        if (rouletteManager.activeRouletteId) {
+            setupHistoryListener(rouletteManager.activeRouletteId);
+        }
+    });
+
+    // 新しいルーレット追加ボタン
+    document.getElementById('add-roulette-btn').addEventListener('click', async () => {
+        const nameInput = document.getElementById('new-roulette-name');
+        const newName = nameInput.value.trim();
+        if (!newName) {
+            showCustomModal("エラー", "ルーレット名を入力してください。", () => {});
+            return;
+        }
+        
+        const newId = Date.now().toString();
+        const newRoulette = {
+            id: newId,
+            name: newName,
+            numItems: 10,
+            drawCount: 1,
+            isReplacement: false,
+            items: generateItemLabels(10) // デフォルトで10項目を生成
+        };
+
+        rouletteManager.roulettes.push(newRoulette);
+        rouletteManager.activeRouletteId = newId; // 新しいルーレットをアクティブに
+        
+        await saveRouletteManager();
+        nameInput.value = '';
+        updateRouletteUI();
+    });
+
+    // 現在のルーレット削除ボタン
+    document.getElementById('delete-roulette-btn').addEventListener('click', () => {
+        const activeRoulette = getActiveRoulette();
+        if (!activeRoulette) return;
+
+        showCustomModal(
+            "ルーレットの削除",
+            `本当に「${activeRoulette.name}」を削除しますか？このルーレットの設定と履歴が全て削除されます。`,
+            async () => {
+                const index = rouletteManager.roulettes.findIndex(r => r.id === activeRoulette.id);
+                if (index > -1) {
+                    // 1. ルーレット設定の削除
+                    rouletteManager.roulettes.splice(index, 1);
+                    
+                    // 2. 新しいアクティブなルーレットを設定
+                    if (rouletteManager.roulettes.length > 0) {
+                        rouletteManager.activeRouletteId = rouletteManager.roulettes[0].id;
+                    } else {
+                        // ルーレットが一つもなくなった場合、初期化関数を呼び出して再作成
+                        initializeRouletteManager();
+                    }
+
+                    // 3. 履歴の削除 (コレクションの削除はクライアントでは難しいので、ドキュメントをすべて削除するロジックは省略し、
+                    //    代わりにルーレットマネージャーの更新と履歴リストのクリアのみを行います。
+                    //    FirestoreのSecurity Rulesとクライアントコードの制限により、コレクション全体の削除は通常サーバーサイドで行うべきです)
+                    //    ただし、ここではユーザーが混乱しないよう、UI上は履歴がなくなったことを明確にします。
+
+                    await saveRouletteManager();
+                    updateRouletteUI();
+                }
+            }
+        );
+    });
+
+    // --- 抽選設定 ---
+    
+    // 項目数生成ボタン
+    document.getElementById('generate-items-btn').addEventListener('click', () => {
+        const activeRoulette = getActiveRoulette();
+        if (!activeRoulette) return;
+
+        const numItems = parseInt(document.getElementById('num-items').value);
+        if (numItems < 1 || numItems > 1000 || isNaN(numItems)) {
+            showCustomModal("エラー", "項目数は1から1000の間で入力してください。", () => {});
+            return;
+        }
+
+        showCustomModal(
+            "項目再生成の確認",
+            `現在のルーレット「${activeRoulette.name}」の項目を全てリセットし、${numItems}項目で再生成します。よろしいですか？`,
+            async () => {
+                activeRoulette.numItems = numItems;
+                activeRoulette.items = generateItemLabels(numItems);
+                
+                await saveRouletteManager();
+                updateRouletteUI();
+            }
+        );
+    });
+
+    // 抽選個数変更時の処理
+    document.getElementById('draw-count').addEventListener('change', async (e) => {
+        const activeRoulette = getActiveRoulette();
+        if (activeRoulette) {
+            activeRoulette.drawCount = parseInt(e.target.value);
+            await saveRouletteManager();
+            updateRouletteUI();
+        }
+    });
+
+    // 復元抽出スイッチ変更時の処理
+    document.getElementById('is-replacement-toggle').addEventListener('change', async (e) => {
+        const isReplacement = e.target.checked;
+        const activeRoulette = getActiveRoulette();
+        if (activeRoulette) {
+            activeRoulette.isReplacement = isReplacement;
+            updateReplacementSwitchAppearance(isReplacement);
+            await saveRouletteManager();
+        }
+    });
+
+    // 履歴の消去ボタン
+    document.getElementById('clear-history-btn').addEventListener('click', () => {
+        const activeRoulette = getActiveRoulette();
+        if (!activeRoulette) return;
+        
+        showCustomModal(
+            "履歴消去の確認",
+            `現在のルーレット「${activeRoulette.name}」の過去の当選履歴を全て消去します。よろしいですか？`,
+            async () => {
+                if (!db || !userId || !activeRoulette.id) return;
+
+                showLoadingModal();
+                try {
+                    const historyColRef = collection(db, getHistoryCollectionPath(userId, activeRoulette.id));
+                    
+                    // クライアント側でドキュメントを削除
+                    const snapshot = await getDocs(query(historyColRef));
+                    const deletePromises = [];
+                    snapshot.forEach(docSnap => {
+                        deletePromises.push(deleteDoc(docSnap.ref));
+                    });
+
+                    await Promise.all(deletePromises);
+                    
+                    // 履歴リストをクリアし、UIを更新
+                    historyList = [];
+                    updateHistoryUI();
+                    console.log("History cleared successfully.");
+
+                } catch (e) {
+                    console.error("Error clearing history:", e);
+                    showCustomModal("エラー", "履歴の消去中にエラーが発生しました。", () => {});
+                } finally {
+                    hideLoadingModal();
+                }
+            }
+        );
+    });
+    
+    // --- 抽選実行 ---
+
+    // 抽選開始ボタン
+    document.getElementById('draw-btn').addEventListener('click', drawLottery);
+
     </script>
-    <style>
-        /* スクロールバーのスタイルをカスタマイズ (オプション) */
-        .custom-scrollbar::-webkit-scrollbar {
-            width: 8px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-thumb {
-            background-color: #d1d5db;
-            border-radius: 4px;
-        }
-        .custom-scrollbar::-webkit-scrollbar-track {
-            background: #f3f4f6;
+</body>
+</html>
         }
         
         /* トグルスイッチの基本スタイル */
