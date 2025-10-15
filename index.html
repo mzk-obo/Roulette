@@ -758,183 +758,196 @@
     // 5. イベントリスナー
     // =========================================================================
 
-    // アプリケーション起動時の初期処理
-    window.addEventListener('load', () => {
-        initFirebase(); // Firebase初期化と認証開始
+    // 項目生成ボタンのイベントリスナー
+    generateItemsButton.addEventListener('click', () => {
+        const currentRoulette = currentManager.roulettes[currentManager.activeRouletteId];
+        const count = parseInt(itemCountInput.value, 10);
+        
+        if (isNaN(count) || count < 1 || count > 1000) {
+            showMessage('項目数は1から1000の間で入力してください。', 'error');
+            return;
+        }
 
-        // PWAサービスワーカーの登録
+        const confirmTitle = '項目再生成の確認';
+        const confirmMessage = currentRoulette.initialItems.length > 0
+            ? '既存の項目を破棄し、新しく' + count + '個の項目を生成します。よろしいですか？'
+            : count + '個の項目を生成します。';
+
+        showConfirmModal(confirmTitle, confirmMessage, () => {
+            currentRoulette.initialItems = Array.from({ length: count }, (_, i) => String(i + 1));
+            currentRoulette.remainingItems = [...currentRoulette.initialItems];
+            currentRoulette.history = []; // 項目が変わるので履歴はクリア
+
+            saveRouletteManager().then(() => {
+                renderRouletteInfo(currentRoulette);
+                showMessage(count + '個の項目を生成しました。', 'success');
+            }).catch(e => {
+                showMessage(`項目の生成と保存に失敗しました: ${e.message}`, 'error');
+            });
+        });
+    });
+
+    // 抽選開始ボタンのイベントリスナー (6)
+    drawLotteryButton.addEventListener('click', () => {
+        const currentRoulette = currentManager.roulettes[currentManager.activeRouletteId];
+        const drawCount = parseInt(drawCountInput.value, 10);
+        const method = drawMethodSelect.value;
+        const availableCount = currentRoulette.remainingItems.length;
+
+        if (drawCount < 1 || isNaN(drawCount)) {
+            showMessage('抽選個数は1個以上を指定してください。', 'error');
+            return;
+        }
+
+        if (availableCount === 0) {
+            showMessage('残りの項目がありません。項目を再生成してください。', 'error');
+            return;
+        }
+
+        if (method === 'without_replacement' && drawCount > availableCount) {
+            showMessage(`非復元抽出では、残りの項目数（${availableCount}）を超える個数を抽選できません。`, 'error');
+            return;
+        }
+
+        const result = drawLottery(currentRoulette, drawCount, method);
+        currentRoulette.history.push({ 
+            timestamp: Date.now(), 
+            result: result.sort((a, b) => parseInt(a) - parseInt(b)), 
+            method: method 
+        });
+
+        // 結果を表示
+        document.getElementById('lotteryResult').textContent = result.sort((a, b) => parseInt(a) - parseInt(b)).join(', ');
+        showMessage('抽選が完了しました！', 'success');
+        
+        // 履歴は最大50件に制限
+        if (currentRoulette.history.length > 50) {
+            currentRoulette.history.splice(0, currentRoulette.history.length - 50);
+        }
+
+        saveRouletteManager().then(() => {
+            renderRouletteInfo(currentRoulette);
+        }).catch(e => {
+            showMessage(`抽選結果の保存に失敗しました: ${e.message}`, 'error');
+        });
+    });
+
+    // 履歴消去ボタンのイベントリスナー (7)
+    clearHistoryButton.addEventListener('click', () => {
+        showConfirmModal('履歴の全消去確認', 
+                         '現在のルーレットの抽選履歴をすべて消去します。よろしいですか？', 
+                         () => {
+            const currentRoulette = currentManager.roulettes[currentManager.activeRouletteId];
+            currentRoulette.history = [];
+            
+            saveRouletteManager().then(() => {
+                renderRouletteInfo(currentRoulette);
+                showMessage('履歴を消去しました。', 'success');
+            }).catch(e => {
+                showMessage(`履歴の消去に失敗しました: ${e.message}`, 'error');
+            });
+        });
+    });
+    
+    // ルーレット追加ボタンのイベントリスナー (8)
+    addRouletteButton.addEventListener('click', () => {
+        const name = prompt('新しいルーレットの名前を入力してください:');
+        if (name && name.trim()) {
+            const newId = crypto.randomUUID();
+            currentManager.roulettes[newId] = createNewRoulette(name.trim());
+            currentManager.activeRouletteId = newId;
+
+            saveRouletteManager().then(() => {
+                renderRouletteSelect();
+                renderRouletteInfo(currentManager.roulettes[newId]);
+                showMessage(`「${name.trim()}」を作成しました。`, 'success');
+            }).catch(e => {
+                showMessage(`ルーレットの作成に失敗しました: ${e.message}`, 'error');
+            });
+        }
+    });
+
+    // ルーレット削除ボタンのイベントリスナー (9)
+    deleteRouletteButton.addEventListener('click', () => {
+        const currentId = currentManager.activeRouletteId;
+        const rouletteIds = Object.keys(currentManager.roulettes);
+
+        if (rouletteIds.length <= 1) {
+            showMessage('ルーレットは最低1つ必要です。削除できません。', 'error');
+            return;
+        }
+
+        showConfirmModal('ルーレットの削除確認', 
+                         `「${currentManager.roulettes[currentId].name}」を削除します。よろしいですか？`, 
+                         () => {
+            // 現在のルーレットを削除
+            delete currentManager.roulettes[currentId];
+            
+            // 新しいアクティブなIDを設定 (残っている最初のID)
+            const newActiveId = Object.keys(currentManager.roulettes)[0];
+            currentManager.activeRouletteId = newActiveId;
+
+            saveRouletteManager().then(() => {
+                renderRouletteSelect();
+                renderRouletteInfo(currentManager.roulettes[newActiveId]);
+                showMessage('ルーレットを削除しました。', 'success');
+            }).catch(e => {
+                showMessage(`ルーレットの削除に失敗しました: ${e.message}`, 'error');
+            });
+        });
+    });
+
+    // ルーレット切り替えドロップダウンの変更イベントリスナー (10)
+    rouletteSelect.addEventListener('change', (e) => {
+        const newId = e.target.value;
+        if (newId) {
+            currentManager.activeRouletteId = newId;
+            saveRouletteManager().then(() => {
+                renderRouletteInfo(currentManager.roulettes[newId]);
+            }).catch(e => {
+                showMessage(`ルーレットの切り替えに失敗しました: ${e.message}`, 'error');
+            });
+        }
+    });
+
+    // =========================================================================
+    // 6. Service Workerの登録 (PWAインストール機能の有効化)
+    // =========================================================================
+
+    // Service Workerの登録関数
+    const registerServiceWorker = () => {
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./service-worker.js')
-                .then(reg => console.log('Service Worker Registered.', reg))
-                .catch(err => console.error('Service Worker registration failed:', err));
+            // GitHub PagesのサブディレクトリURLに対応するため、scopeとパスを指定
+            // [重要] リポジトリ名 (Roulette) をパスに含める
+            const serviceWorkerPath = '/Roulette/service-worker.js'; 
+            
+            navigator.serviceWorker.register(serviceWorkerPath, { scope: '/Roulette/' })
+                .then((registration) => {
+                    console.log('Service Worker 登録成功:', registration.scope);
+                })
+                .catch((error) => {
+                    console.error('Service Worker 登録失敗:', error);
+                });
         }
-    });
-
-    // --- ルーレット管理 ---
+    };
     
-    // ルーレット選択時の処理
-    document.getElementById('roulette-select').addEventListener('change', (e) => {
-        rouletteManager.activeRouletteId = e.target.value;
-        saveRouletteManager(); // アクティブIDの変更を保存
-        updateRouletteUI();
-        // 履歴リスナーを新しいルーレットIDに切り替える
-        if (rouletteManager.activeRouletteId) {
-            setupHistoryListener(rouletteManager.activeRouletteId);
-        }
-    });
-
-    // 新しいルーレット追加ボタン
-    document.getElementById('add-roulette-btn').addEventListener('click', async () => {
-        const nameInput = document.getElementById('new-roulette-name');
-        const newName = nameInput.value.trim();
-        if (!newName) {
-            showCustomModal("エラー", "ルーレット名を入力してください。", () => {});
-            return;
-        }
-        
-        const newId = Date.now().toString();
-        const newRoulette = {
-            id: newId,
-            name: newName,
-            numItems: 10,
-            drawCount: 1,
-            isReplacement: false,
-            items: generateItemLabels(10) // デフォルトで10項目を生成
-        };
-
-        rouletteManager.roulettes.push(newRoulette);
-        rouletteManager.activeRouletteId = newId; // 新しいルーレットをアクティブに
-        
-        await saveRouletteManager();
-        nameInput.value = '';
-        updateRouletteUI();
-    });
-
-    // 現在のルーレット削除ボタン
-    document.getElementById('delete-roulette-btn').addEventListener('click', () => {
-        const activeRoulette = getActiveRoulette();
-        if (!activeRoulette) return;
-
-        showCustomModal(
-            "ルーレットの削除",
-            `本当に「${activeRoulette.name}」を削除しますか？このルーレットの設定と履歴が全て削除されます。`,
-            async () => {
-                const index = rouletteManager.roulettes.findIndex(r => r.id === activeRoulette.id);
-                if (index > -1) {
-                    // 1. ルーレット設定の削除
-                    rouletteManager.roulettes.splice(index, 1);
-                    
-                    // 2. 新しいアクティブなルーレットを設定
-                    if (rouletteManager.roulettes.length > 0) {
-                        rouletteManager.activeRouletteId = rouletteManager.roulettes[0].id;
-                    } else {
-                        // ルーレットが一つもなくなった場合、初期化関数を呼び出して再作成
-                        initializeRouletteManager();
-                    }
-
-                    // 3. 履歴の削除 (コレクションの削除はクライアントでは難しいので、ドキュメントをすべて削除するロジックは省略し、
-                    //    代わりにルーレットマネージャーの更新と履歴リストのクリアのみを行います。
-                    //    FirestoreのSecurity Rulesとクライアントコードの制限により、コレクション全体の削除は通常サーバーサイドで行うべきです)
-                    //    ただし、ここではユーザーが混乱しないよう、UI上は履歴がなくなったことを明確にします。
-
-                    await saveRouletteManager();
-                    updateRouletteUI();
-                }
-            }
-        );
-    });
-
-    // --- 抽選設定 ---
+    // アプリ初期化処理の最後にService Workerを登録
+    window.addEventListener('load', registerServiceWorker);
     
-    // 項目数生成ボタン
-    document.getElementById('generate-items-btn').addEventListener('click', () => {
-        const activeRoulette = getActiveRoulette();
-        if (!activeRoulette) return;
+} // <-- initApp() 関数の閉じ括弧
 
-        const numItems = parseInt(document.getElementById('num-items').value);
-        if (numItems < 1 || numItems > 1000 || isNaN(numItems)) {
-            showCustomModal("エラー", "項目数は1から1000の間で入力してください。", () => {});
-            return;
-        }
-
-        showCustomModal(
-            "項目再生成の確認",
-            `現在のルーレット「${activeRoulette.name}」の項目を全てリセットし、${numItems}項目で再生成します。よろしいですか？`,
-            async () => {
-                activeRoulette.numItems = numItems;
-                activeRoulette.items = generateItemLabels(numItems);
-                
-                await saveRouletteManager();
-                updateRouletteUI();
-            }
-        );
-    });
-
-    // 抽選個数変更時の処理
-    document.getElementById('draw-count').addEventListener('change', async (e) => {
-        const activeRoulette = getActiveRoulette();
-        if (activeRoulette) {
-            activeRoulette.drawCount = parseInt(e.target.value);
-            await saveRouletteManager();
-            updateRouletteUI();
+// アプリケーション全体のエントリーポイント
+// Firebase認証状態が確定した後、initAppを呼び出す
+if (typeof auth !== 'undefined') {
+    onAuthStateChanged(auth, (user) => {
+        if (!authReady) {
+            // 認証状態が確定し、ユーザーオブジェクトが設定されたら
+            // 初回のみinitAppを実行
+            authReady = true;
+            initApp(user); 
         }
     });
-
-    // 復元抽出スイッチ変更時の処理
-    document.getElementById('is-replacement-toggle').addEventListener('change', async (e) => {
-        const isReplacement = e.target.checked;
-        const activeRoulette = getActiveRoulette();
-        if (activeRoulette) {
-            activeRoulette.isReplacement = isReplacement;
-            updateReplacementSwitchAppearance(isReplacement);
-            await saveRouletteManager();
-        }
-    });
-
-    // 履歴の消去ボタン
-    document.getElementById('clear-history-btn').addEventListener('click', () => {
-        const activeRoulette = getActiveRoulette();
-        if (!activeRoulette) return;
-        
-        showCustomModal(
-            "履歴消去の確認",
-            `現在のルーレット「${activeRoulette.name}」の過去の当選履歴を全て消去します。よろしいですか？`,
-            async () => {
-                if (!db || !userId || !activeRoulette.id) return;
-
-                showLoadingModal();
-                try {
-                    const historyColRef = collection(db, getHistoryCollectionPath(userId, activeRoulette.id));
-                    
-                    // クライアント側でドキュメントを削除
-                    const snapshot = await getDocs(query(historyColRef));
-                    const deletePromises = [];
-                    snapshot.forEach(docSnap => {
-                        deletePromises.push(deleteDoc(docSnap.ref));
-                    });
-
-                    await Promise.all(deletePromises);
-                    
-                    // 履歴リストをクリアし、UIを更新
-                    historyList = [];
-                    updateHistoryUI();
-                    console.log("History cleared successfully.");
-
-                } catch (e) {
-                    console.error("Error clearing history:", e);
-                    showCustomModal("エラー", "履歴の消去中にエラーが発生しました。", () => {});
-                } finally {
-                    hideLoadingModal();
-                }
-            }
-        );
-    });
-    
-    // --- 抽選実行 ---
-
-    // 抽選開始ボタン
-    document.getElementById('draw-btn').addEventListener('click', drawLottery);
-
-    </script>
+}
+</script>
 </body>
 </html>
