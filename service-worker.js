@@ -1,29 +1,38 @@
-// サービスワーカーのバージョン (キャッシュを更新したい場合にこの番号を変更します)
-const CACHE_NAME = 'roulette-cache-v2'; // キャッシュ永続化修正のためバージョンをv2に
-// キャッシュするファイル
+// Service Workerのバージョン。キャッシュを更新したい場合にこの値を変更します
+const CACHE_NAME = 'roulette-cache-v2'; 
+// キャッシュする主要ファイル
 const urlsToCache = [
     './', 
     './index.html',
-    './manifest.json', // manifestファイルもキャッシュ対象
-    './service-worker.js' // 自身のファイルもキャッシュ対象
+    './manifest.json',
+    // アイコン画像もキャッシュ対象に含めます (ルートに存在することを前提)
+    './icon-192.png',
+    './icon-512.png'
 ];
 
-// インストールイベント: キャッシュの初期化
+// インストールイベント: 初期キャッシュの作成
 self.addEventListener('install', (event) => {
-  console.log('[Service Worker] Installing...');
+  console.log('Service Worker: Installing and caching assets.');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => {
-        console.log('[Service Worker] All files cached successfully.');
+        // 全てのファイルをキャッシュに追加
         return cache.addAll(urlsToCache).catch(error => {
-            console.error('[Service Worker] Failed to cache files:', error);
+            console.error('Service Worker: Failed to cache some assets.', error);
         });
       })
   );
 });
 
-// fetchイベント: キャッシュからリソースを返す
+// fetchイベント: キャッシュ優先のストラテジー
 self.addEventListener('fetch', (event) => {
+  // FirebaseやCDNからのリクエストはキャッシュしない
+  if (event.request.url.startsWith('https://www.gstatic.com') || 
+      event.request.url.includes('cdn.tailwindcss.com') ||
+      event.request.url.includes('firebaseapp.com')) {
+    return;
+  }
+  
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -39,24 +48,20 @@ self.addEventListener('fetch', (event) => {
 
 // アクティベートイベント: 古いキャッシュの削除
 self.addEventListener('activate', (event) => {
-  console.log('[Service Worker] Activating...');
+  console.log('Service Worker: Activating and cleaning old caches.');
   const cacheWhitelist = [CACHE_NAME];
   event.waitUntil(
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheWhitelist.indexOf(cacheName) === -1) {
-            console.log(`[Service Worker] Deleting old cache: ${cacheName}`);
             // ホワイトリストにない古いキャッシュを削除
             return caches.delete(cacheName);
           }
         })
       );
-    }).then(() => {
-        console.log('[Service Worker] Activation complete.');
-        // Service Workerがすぐに制御権を持つようにする
-        return self.clients.claim();
     })
   );
+  // 新しい Service Workerがすぐに制御できるようにします
+  event.waitUntil(self.clients.claim());
 });
-
