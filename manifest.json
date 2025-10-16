@@ -1,22 +1,22 @@
 {
-  "name": "マルチルーレット",
-  "short_name": "ルーレット",
-  "description": "複数の設定を管理できる項目選択ツール",
-  "start_url": "./index.html",
-  "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#4f46e5",
-  "icons": [
-    {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
-  ]
+ "name": "マルチルーレット項目選択ツール",
+ "short_name": "ルーレット",
+ "description": "データ永続化とアカウント引き継ぎ対応のマルチ項目選択ツール。",
+ "start_url": "/Roulette/index.html",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#ffffff",
+ "theme_color": "#3b82f6",
+ "icons": [
+  {
+   "src": "/Roulette/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "/Roulette/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  }
+ ]
 }
-
